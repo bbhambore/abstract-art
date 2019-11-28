@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block sub_content %}
+<div class = "text-center">
+  <h1> Images </h1>
+</div>
+
+{% for image in images %}
+  <div>
+    <img src={{image}}/>
+  </div>
+{% endfor %}
+{% endblock %}
