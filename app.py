@@ -30,14 +30,22 @@ CKEditor(app)
 
 @app.route('/')
 def index():
-    cur = mysql.connection.cursor()
-    resultValue = cur.execute("SELECT * FROM blog")
-    if resultValue > 0:
-        blogs = cur.fetchall()
+    if session:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM ((SELECT * FROM question where user_id = " + str(session['userId']) + \
+        ") as q NATURAL JOIN (SELECT * FROM image) as i)"
+        resultValue = cur.execute(query)
+        if resultValue > 0:
+            results = cur.fetchall()
+            cur.close()
+            for result in results:
+                img = base64.b64encode(result["image_blob"]).decode("utf-8")
+                result["image_blob"] = img
+            return render_template('index.html', results = results)
         cur.close()
-        return render_template('index.html', blogs = blogs)
-    cur.close()
-    return render_template('index.html', blogs = None)
+        return render_template('index.html', results = None)
+    else:
+        return redirect('/login')
 
 @app.route('/about/')
 def about():
@@ -57,19 +65,20 @@ def register():
     if request.method == 'POST':
         try:
             userDetails = request.form
+            print(userDetails['last_name'])
             if userDetails['password'] != userDetails['confirm_password']:
                 flash('Passwords do not match! Try again.', 'danger')
                 return render_template('register.html')
             cur = mysql.connection.cursor()
-            cur.execute("INSERT INTO user (first_name, last_name, username, email, password)" \
-            "VALUES(%s, %s, %s, %s, %s)", (userDetails['first_name'], userDetails['last_name'], \
-            userDetails['username'], userDetails['email'], generate_password_hash(userDetails['password'])))
+            cur.execute("INSERT INTO login (password, user_type, first_name, last_name, email)" \
+            "VALUES(%s, %s, %s, %s, %s)", (generate_password_hash(userDetails['password']), \
+            userDetails['user_type'], userDetails['first_name'], userDetails['last_name'], userDetails['email']))
             mysql.connection.commit()
             cur.close()
             flash('Registration successful! Please login.', 'success')
             return redirect('/login')
         except:
-            flash('Your username might already be used', 'danger')
+            flash('User could not be registered', 'danger')
             return render_template('register.html')
     return render_template('register.html')
 
@@ -77,16 +86,19 @@ def register():
 def login():
     if request.method == "POST":
         userDetails = request.form
-        username = userDetails['username']
+        email = userDetails['email']
         cur = mysql.connection.cursor()
-        resultValue = cur.execute("SELECT * FROM user WHERE username = %s", ([username]))
+        resultValue = cur.execute("SELECT * FROM login WHERE email = %s", ([email]))
         if resultValue > 0:
             user = cur.fetchone()
+            print(user)
             if check_password_hash(user['password'], userDetails['password']):
                 session['login'] = True
                 session['firstName'] = user['first_name']
                 session['lastName'] = user['last_name']
-                flash('Welcome ' +session['firstName'] + '! You have been successfully logged in', 'success')
+                session['userId'] = user['user_id']
+                print(session)
+                flash('Welcome ' + session['firstName'] + '! You have been successfully logged in', 'success')
             else:
                 cur.close()
                 flash('Password do not match', 'danger')
@@ -101,29 +113,35 @@ def login():
 
 @app.route('/write-blog/', methods = ['GET', 'POST'])
 def write_blog():
-    if request.method == "POST":
-        blogpost = request.form
-        title = blogpost['title']
-        body = blogpost['body']
-        author = session['firstName'] + ' ' + session['lastName']
-        cur = mysql.connection.cursor()
-        cur.execute("INSERT INTO blog (title, body, author) VALUES (%s, %s, %s)", (title, body, author))
-        mysql.connection.commit()
-        cur.close()
-        flash("Successfully posted new blog", 'success')
-        return redirect('/')
-    return render_template('write-blog.html')
+    if session:
+        if request.method == "POST":
+            blogpost = request.form
+            title = blogpost['title']
+            body = blogpost['body']
+            author = session['firstName'] + ' ' + session['lastName']
+            cur = mysql.connection.cursor()
+            cur.execute("INSERT INTO blog (title, body, author) VALUES (%s, %s, %s)", (title, body, author))
+            mysql.connection.commit()
+            cur.close()
+            flash("Successfully posted new blog", 'success')
+            return redirect('/')
+        return render_template('write-blog.html')
+    else:
+        return redirect('/login')
 
 @app.route('/my-blogs/', methods = ['GET'])
 def my_blogs():
-    author = session['firstName'] + ' ' + session['lastName']
-    cur = mysql.connection.cursor()
-    result_value = cur.execute("SELECT * FROM blog WHERE author = %s", [author])
-    if result_value > 0:
-        my_blogs = cur.fetchall()
-        return render_template('my-blogs.html', my_blogs = my_blogs)
+    if session:
+        author = session['firstName'] + ' ' + session['lastName']
+        cur = mysql.connection.cursor()
+        result_value = cur.execute("SELECT * FROM blog WHERE author = %s", [author])
+        if result_value > 0:
+            my_blogs = cur.fetchall()
+            return render_template('my-blogs.html', my_blogs = my_blogs)
+        else:
+            return render_template('my-blogs.html', my_blogs = None)
     else:
-        return render_template('my-blogs.html', my_blogs = None)
+        return redirect('/login')
 
 @app.route('/edit-blog/<int:id>/', methods = ['GET', 'POST'])
 def edit_blog(id):
@@ -164,8 +182,13 @@ def logout():
 @app.route('/upload/')
 
 def upload():
-    insertBLOB("Bharath", "D:/PGDBA/courses/udemy/flog/joker.jfif")
+    insertBLOB("Terrain", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_5terre.jpg","nature")
+    insertBLOB("Forest", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_forest.jpg","nature")
+    insertBLOB("Lights", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_lights.jpg","lights")
+    insertBLOB("Mountains", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_mountains.jpg","nature")
     return render_template('login.html')
+    # insertBLOB("Bharath", "D:/PGDBA/courses/udemy/flog/joker.jfif")
+    # return render_template('login.html')
 
 def convertToBinaryData(filename):
     # Convert digital data to binary format
@@ -173,16 +196,16 @@ def convertToBinaryData(filename):
         binaryData = file.read()
     return binaryData
 
-def insertBLOB(name, photo):
+def insertBLOB(name, photo, category):
     print("Inserting BLOB into python_employee table")
     try:
         cur = mysql.connection.cursor();
-        sql_insert_blob_query = "INSERT INTO python_employee(name, photo) VALUES (%s,%s)"
-
+        # sql_insert_blob_query = "INSERT INTO python_employee(name, photo) VALUES (%s,%s)"
+        sql_insert_blob_query = "INSERT INTO image(image_blob, image_catg, image_name) VALUES (%s,%s,%s)"
         empPicture = convertToBinaryData(photo)
 
         # Convert data into tuple format
-        insert_blob_tuple = (name, empPicture)
+        insert_blob_tuple = (empPicture, category, name)
         result = cur.execute(sql_insert_blob_query, insert_blob_tuple)
         mysql.connection.commit()
         print("Image inserted successfully as a BLOB into python_employee table", result)
@@ -228,7 +251,7 @@ def write_file(data, filename):
 #         blob = row['photo']
 #         image = blob.decode('base64')
 #             # file = row[3]
-#             # print("Storing employee image and bio-data on disk \n")
+#             # print("Storing employee image and bio-data on disk /n")
 #         write_file(image, photo)
 #
 #     except mysql.connection.Error as error:
@@ -259,7 +282,7 @@ def readBLOB(emp_id, photo):
             # file = row[3]
             print("**********************")
             print(type(image))
-            print("Storing employee image and bio-data on disk \n")
+            print("Storing employee image and bio-data on disk /n")
             # img = image.decode('base64')
             img = base64.b64decode(image)
             print(img)
