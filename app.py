@@ -6,6 +6,7 @@ import io
 import base64
 import PIL.Image
 from flask_ckeditor import CKEditor
+from datetime import datetime
 
 from PIL import Image
 import io
@@ -25,6 +26,7 @@ app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 mysql = MySQL(app)
 
 app.config['SECRET_KEY'] = os.urandom(24)
+app.config["IMAGE_UPLOADS"] = 'static/img'
 
 CKEditor(app)
 
@@ -111,21 +113,34 @@ def login():
         return redirect('/')
     return render_template('login.html')
 
-@app.route('/write-blog/', methods = ['GET', 'POST'])
+@app.route('/upload-question/', methods = ['GET', 'POST'])
 def write_blog():
     if session:
         if request.method == "POST":
-            blogpost = request.form
-            title = blogpost['title']
-            body = blogpost['body']
-            author = session['firstName'] + ' ' + session['lastName']
-            cur = mysql.connection.cursor()
-            cur.execute("INSERT INTO blog (title, body, author) VALUES (%s, %s, %s)", (title, body, author))
-            mysql.connection.commit()
-            cur.close()
-            flash("Successfully posted new blog", 'success')
-            return redirect('/')
-        return render_template('write-blog.html')
+            post = request.form
+            question = post['question']
+            author = session['userId']
+            print('Post values')
+            print(post)
+
+            if request.files:
+                image = request.files["photo"]
+                imagePath = os.path.join(app.config["IMAGE_UPLOADS"], image.filename)
+                image.save(imagePath)
+                print("Image saved")
+                cur = mysql.connection.cursor()
+                imageId = insertBLOB(post['name'], imagePath, post['category'])
+
+                query = "INSERT INTO question (image_id, user_id, question, status, created_dt)" \
+                "VALUES (%s, %s, %s, %s, %s)"
+                tuple = (imageId, author, question, "New", datetime.now())
+                cur.execute(query, tuple)
+                mysql.connection.commit()
+                cur.close()
+                flash("Successfully posted new question", 'success')
+                os.remove(imagePath)
+                return redirect('/')
+        return render_template('upload-question.html')
     else:
         return redirect('/login')
 
@@ -177,16 +192,13 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect('/login')
 
-# ************ New code *************
-
-@app.route('/upload/')
-
-def upload():
-    insertBLOB("Terrain", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_5terre.jpg","nature")
-    insertBLOB("Forest", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_forest.jpg","nature")
-    insertBLOB("Lights", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_lights.jpg","lights")
-    insertBLOB("Mountains", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_mountains.jpg","nature")
-    return render_template('login.html')
+# @app.route('/upload/')
+# def upload():
+#     insertBLOB("Terrain", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_5terre.jpg","nature")
+    # insertBLOB("Forest", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_forest.jpg","nature")
+    # insertBLOB("Lights", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_lights.jpg","lights")
+    # insertBLOB("Mountains", "D:/PGDBA/sem-1/fundamentals-of-database-systems/project/abstract-art/images/img_mountains.jpg","nature")
+    # return render_template('login.html')
     # insertBLOB("Bharath", "D:/PGDBA/courses/udemy/flog/joker.jfif")
     # return render_template('login.html')
 
@@ -197,7 +209,7 @@ def convertToBinaryData(filename):
     return binaryData
 
 def insertBLOB(name, photo, category):
-    print("Inserting BLOB into python_employee table")
+    print("Inserting BLOB into IMAGE table")
     try:
         cur = mysql.connection.cursor();
         # sql_insert_blob_query = "INSERT INTO python_employee(name, photo) VALUES (%s,%s)"
@@ -208,105 +220,17 @@ def insertBLOB(name, photo, category):
         insert_blob_tuple = (empPicture, category, name)
         result = cur.execute(sql_insert_blob_query, insert_blob_tuple)
         mysql.connection.commit()
-        print("Image inserted successfully as a BLOB into python_employee table", result)
 
+        print("Image inserted successfully as a BLOB into IMAGE table", result)
+        id = cur.lastrowid
     except mysql.connection.Error as error:
-        print("Failed inserting BLOB data into MySQL table {}".format(error))
+        print("Failed inserting BLOB data into IMAGE table {}".format(error))
 
     finally:
-        # if (mysql.connection.is_connected()):
             cur.close()
             # connection.close()
             print("MySQL connection is closed")
-
-
-@app.route('/read/')
-# ***************** Start of read *************
-def read():
-    # images.append(readBLOB("Bharath", "D:/PGDBA/courses/udemy/flog/img3.jfif"))
-    img = readBLOB(6, "D:/PGDBA/courses/udemy/flog/image.png")
-    print(type(img))
-    return render_template('images.html', image = img)
-
-def write_file(data, filename):
-    # Convert binary data to proper format and write it on Hard Disk
-    print(type(data))
-    img = Image.open(data)
-    print (img.size)
-    # image = Image.frombytes('RGBA', (128,128), data, 'raw')
-    # print(type(image))
-    with open(filename, 'wb') as file:
-        file.write(image.decode('base64'))
-
-# def readBLOB(emp_id, photo):
-#     print("Reading BLOB data from python_employee table")
-#
-#     try:
-#         image = []
-#         cur = mysql.connection.cursor()
-#         sql_fetch_blob_query = "SELECT photo from python_employee where name = %s"
-#         cur.execute(sql_fetch_blob_query, (emp_id,))
-#         record = cur.fetchone()
-#         # for row in record:
-#         blob = row['photo']
-#         image = blob.decode('base64')
-#             # file = row[3]
-#             # print("Storing employee image and bio-data on disk /n")
-#         write_file(image, photo)
-#
-#     except mysql.connection.Error as error:
-#         print("Failed to read BLOB data from MySQL table {}".format(error))
-#
-#     finally:
-#         # if (connection.is_connected()):
-#             cur.close()
-#             # connection.close()
-#             print("MySQL connection is closed")
-#             return image
-
-def readBLOB(emp_id, photo):
-    print("Reading BLOB data from python_employee table")
-
-    try:
-        cursor = mysql.connection.cursor()
-        sql_fetch_blob_query = "SELECT photo from python_employee where id = %s"
-
-        cursor.execute(sql_fetch_blob_query, (emp_id,))
-        record = cursor.fetchall()
-        print(record)
-        for row in record:
-            # print("Id = ", row[0], )
-            # print("Name = ", row[1])
-            image = row['photo']
-            print(type(row['photo']))
-            # file = row[3]
-            print("**********************")
-            print(type(image))
-            print("Storing employee image and bio-data on disk /n")
-            # img = image.decode('base64')
-            img = base64.b64decode(image)
-            print(img)
-            img1 = io.BytesIO(img)
-            print(img1)
-            img2 = PIL.Image.open(img1)
-            print(img2)
-            img2.show()
-        return img2
-            # write_file(image, photo)
-            # write_file(file, bioData)
-
-    except mysql.connection.Error as error:
-        print("Failed to read BLOB data from MySQL table {}".format(error))
-
-    finally:
-        # if (connection.is_connected()):
-            cursor.close()
-            # connection.close()
-            print("MySQL connection is closed")
-
-
-
-# **************** End ******************
+            return id
 
 if __name__ == '__main__':
     app.run(debug = True)
