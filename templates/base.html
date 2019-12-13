@@ -2,6 +2,22 @@
 {% block head %}
   {{ ckeditor.load() }}
   {{ super() }}
+  <style>
+    div.polaroid {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      width: 40%;
+      background-color: white;
+      box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+      margin-bottom: 25px;
+    }
+    div.container {
+       margin-left:200px;
+      /* text-align: left; */
+      padding: 10px 20px;
+    }
+  </style>
 {% endblock %}
 {% block title %}
   Title
