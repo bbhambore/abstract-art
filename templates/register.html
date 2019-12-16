@@ -1,59 +1,82 @@
-{% extends 'base.html' %}
-{% block sub_content %}
-<div class = "text-center">
-  <h1> User Registration </h1>
-</div>
-<form class = "form-horizontal" method = "POST">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Requestor </title>
 
-  <div class = "form-group">
-    <label class = "control-label col-sm-2"> First Name </label>
-    <div class = "col-sm-5">
-      <input type = "text" name = "first_name"/>
-    </div>
-  </div>
+    <!-- Font Icon -->
+    <link rel="stylesheet" href={{ url_for('static', filename='fonts/material-icon/fonts/material-design-iconic-font.min.css') }}>
 
-  <div class = "form-group">
-    <label class = "control-label col-sm-2"> Last Name </label>
-    <div class = "col-sm-5">
-      <input type = "text" name = "last_name"/>
-    </div>
-  </div>
+    <!-- Main css -->
+    <link rel="stylesheet" href={{ url_for('static', filename='css/style.css') }}>
+</head>
+<body>
 
-  <div class = "form-group">
-    <label class = "control-label col-sm-2"> User Type </label>
-    <div class = "col-sm-5">
-      <select name = "user_type">
-        <option value = "Requestor"> Requestor </option>
-        <option value = "Responder"> Responder </option>
-      </select>
-    </div>
-  </div>
+  {% block content %}
+    {% with messages = get_flashed_messages(with_categories = true) %}
+      {% if messages %}
+        <ul>
+          {% for category, message in messages %}
+            <li class = "alert alert-{{category}}"> {{message}} </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    {% block sub_content %}
+    {% endblock %}
+  {% endblock %}
 
-  <div class = "form-group">
-    <label class = "control-label col-sm-2"> Email </label>
-    <div class = "col-sm-5">
-      <input type = "email" name = "email"/>
-    </div>
-  </div>
+    <div class="main">
 
-  <div class = "form-group">
-    <label class = "control-label col-sm-2"> Password </label>
-    <div class = "col-sm-5">
-      <input type = "password" name = "password"/>
-    </div>
-  </div>
+        <section class="signup">
+            <div class="container">
+                <div class="signup-content">
+                    <form method="POST" id="signup-form" class="signup-form">
+                        <h2 class="form-title">Create account</h2>
+                        <div class="form-group">
+                            <input type="text" class="form-input" name="first_name" id="first_name" placeholder="First Name"/>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" class="form-input" name="last_name" id="last_name" placeholder="Last Name"/>
+                        </div>
+                        <div class="form-group">
+                            <input type="email" class="form-input" name="email" id="email" placeholder="Your Email"/>
+                        </div>
+                        <div class = "form-group">
+                            <select class = "form-input" name = "user_type">
+                              <option value="" disabled selected>Select your Account type</option>
+                              <!-- <option value = "Requestor"> Requestor </option> -->
+                              <option value = "Responder"> Responder </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <input type="password" class="form-input" name="password" id="password" placeholder="Password"/>
+                            <span toggle="#password" class="zmdi zmdi-eye field-icon toggle-password"></span>
+                        </div>
+                        <div class="form-group">
+                            <input type="password" class="form-input" name="confirm_password" id="confirm_password" placeholder="Repeat your password"/>
+                        </div>
+                        <div class="form-group">
+                            <input type="checkbox" name="agree-term" id="agree-term" class="agree-term" />
+                            <label for="agree-term" class="label-agree-term"><span><span></span></span>I agree all statements in  <a href="#" class="term-service">Terms of service</a></label>
+                        </div>
+                        <div class="form-group">
+                            <input type="submit" name="submit" id="submit" class="form-submit" value="Sign up"/>
+                        </div>
+                    </form>
+                    <p class="loginhere">
+                        Already have an account ? <a href="/login" class="loginhere-link">Login here</a>
+                    </p>
+                </div>
+            </div>
+        </section>
 
-  <div class = "form-group">
-    <label class = "control-label col-sm-2"> Confirm Password </label>
-    <div class = "col-sm-5">
-      <input type = "password" name = "confirm_password"/>
     </div>
-  </div>
 
-  <div class = "form-group">
-    <div class = "col-sm-offset-2 col-sm-10">
-      <button type = "Submit"> Submit </button>
-    </div>
-  </div>
-</form>
-{% endblock %}
+
+    <!-- JS -->
+    <script src={{ url_for('static', filename='js/jquery.min.js') }}></script>
+    <script src={{ url_for('static', filename='js/main.js') }}></script>
+</body>
+</html>

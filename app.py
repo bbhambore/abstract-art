@@ -26,7 +26,7 @@ app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 mysql = MySQL(app)
 
 app.config['SECRET_KEY'] = os.urandom(24)
-app.config["IMAGE_UPLOADS"] = 'static/img'
+app.config['IMAGE_UPLOADS'] = 'static/img'
 
 CKEditor(app)
 
@@ -34,8 +34,9 @@ CKEditor(app)
 def index():
     if session:
         cur = mysql.connection.cursor()
-        query = "SELECT * FROM ((SELECT * FROM question where user_id = " + str(session['userId']) + \
-        ") as q NATURAL JOIN (SELECT * FROM image) as i)"
+        # query = "SELECT * FROM ((SELECT * FROM question where user_id = " + str(session['userId']) + \
+        # ") as q NATURAL JOIN (SELECT * FROM image) as i)"
+        query = "SELECT * FROM ((SELECT * FROM question) as q NATURAL JOIN (SELECT * FROM image) as i) ORDER BY qid DESC"
         resultValue = cur.execute(query)
         if resultValue > 0:
             results = cur.fetchall()
@@ -49,18 +50,112 @@ def index():
     else:
         return redirect('/login')
 
-@app.route('/about/')
-def about():
-    return render_template('about.html')
+@app.route('/questions/<int:id>', methods = ['GET', 'POST'])
+def questions(id):
 
-@app.route('/blogs/<int:id>/')
-def blogs(id):
+    if request.method == 'POST':
+        response = "Response"
+        print(request.form)
+        for key,value in request.form.items():
+            if key == "radio":
+                response = value
+            elif key == "new_conv":
+                cur2 = mysql.connection.cursor()
+                query = "INSERT INTO conversation(qid,status,logtime) VALUES (%s,%s,%s)"
+                cur2.execute(query,(id,"Open",datetime.now())) ## Hard coding
+                mysql.connection.commit()
+                last_id_result = cur2.execute("SELECT LAST_INSERT_ID() as last_conv_id FROM conversation LIMIT 1")
+                if last_id_result > 0:
+                    last_id = cur2.fetchone()
+                    conv_id = int(last_id["last_conv_id"])
+                    reply = value
+                cur2.close()
+            else:
+                conv_id = int(key)
+                reply = value
+        cur = mysql.connection.cursor()
+        query = "INSERT INTO reply(user_id,conv_id,reply_type,reply,logtime) VALUES (%s,%s,%s,%s,%s)"
+        cur.execute(query,(session['userId'],conv_id,response,reply,datetime.now()))
+        mysql.connection.commit()
+        cur.close()
+
+    if id == 0:
+        return "<h3>Select a question to view its replies</h3>"
+
     cur = mysql.connection.cursor()
-    resultValue = cur.execute("SELECT * FROM blog WHERE blog_id = {}".format(id))
+    result = {}
+
+    # query = "select * from question where qid = {}"
+    query = "SELECT * FROM ((SELECT * FROM question where qid = " + str(id) + \
+    ") as q NATURAL JOIN (SELECT * FROM image) as i)"
+    res = cur.execute(query)
+    # print(query)
+    print("************************")
+    # print(res)
+    res = cur.fetchone()
+    # print(res)
+    # result['question'] = res['question']
+    img = base64.b64encode(res["image_blob"]).decode("utf-8")
+    res['image_blob'] = img
+    res['userType'] = session['userType']
+    # print(result)
+
+    # query = "SELECT * FROM ((SELECT conv_id,qid,status,CAST(logtime AS char) as conv_logtime FROM conversation where qid = {} ) as A NATURAL JOIN "\
+    # "(SELECT reply_id,user_id,conv_id,reply_type,reply,CAST(logtime AS char) as reply_logtime FROM reply) as B) " \
+    # "ORDER BY conv_logtime DESC, reply_logtime ASC"
+
+    query = "SELECT * FROM ((SELECT conv_id,qid,status,CAST(DATE_FORMAT(logtime, '%Y-%b-%d  %r') AS char) as conv_logtime FROM conversation where qid = {} ) as A NATURAL JOIN "\
+    "(SELECT reply_id,user_id,conv_id,reply_type,reply,CAST(DATE_FORMAT(logtime, '%Y-%b-%d  %r') AS char) as reply_logtime FROM reply) as B) " \
+    "ORDER BY conv_logtime DESC, reply_logtime ASC"
+
+    user_query = "SELECT user_type,first_name,last_name,email from login WHERE user_id = {}"
+    resultValue = cur.execute(query.format(id))
+    # print("********************")
+    print(resultValue)
     if resultValue > 0:
-        blog = cur.fetchone()
-        return render_template('blogs.html', blog = blog)
-    return 'Blog not found'
+        results = cur.fetchall()
+        new_conv = []
+        not_found = True
+        for result in results:
+            cur1 = mysql.connection.cursor()
+            userResultValue = cur1.execute(user_query.format(result["user_id"]))
+            if userResultValue > 0:
+                userResults = cur1.fetchone()
+                user_name = userResults["first_name"] + " " + userResults["last_name"]
+                user_email = userResults["email"]
+                cur1.close()
+            flag = 0
+            for conv in new_conv:
+                not_found = True
+                if result['conv_id'] == conv['conv_id']:
+                    not_found = False
+                    # conv['replies'].append({"reply_id":result['reply_id'],"user_id":result['user_id'],"reply_type":result['reply_type'],"reply":result['reply'],"reply_logtime":result['reply_logtime']})
+                    conv['replies'].append({"user_name":user_name,"user_email":user_email,"reply_id":result['reply_id'],"user_id":result['user_id'],"reply_type":result['reply_type'],"reply":result['reply'],"reply_logtime":result['reply_logtime']})
+                    break
+            if not_found:
+                # new_conv.append({"conv_id":result['conv_id'], "qid":result['qid'], "status":result['status'],\
+                # "conv_logtime":result['conv_logtime'],"replies":[{"reply_id":result['reply_id'],"user_id":result['user_id'],\
+                # "reply_type":result['reply_type'],"reply":result['reply'],"reply_logtime":result['reply_logtime']}]})
+                new_conv.append({"started_by":user_name,"conv_id":result['conv_id'], "qid":result['qid'], "status":result['status'],\
+                "conv_logtime":result['conv_logtime'],"replies":[{"user_name":user_name,"user_email":user_email,"reply_id":result['reply_id'],"user_id":result['user_id'],\
+                "reply_type":result['reply_type'],"reply":result['reply'],"reply_logtime":result['reply_logtime']}]})
+        cur.close()
+        return render_template('test1.html', conversations = new_conv , result = res)
+    cur.close()
+    return render_template('test1.html', result = res)
+
+@app.route('/AcceptReject',methods = ['GET','POST'])
+def foo():
+    if request.method == 'POST':
+        data = request.get_json(force=True)
+        status = str(data["buttonID"]).split(".")[0]
+        conv_id = str(data["buttonID"]).split(".")[1]
+        cur = mysql.connection.cursor()
+        query = "UPDATE conversation SET conversation.status = %s WHERE conv_id = %s"
+        cur.execute(query,(status,conv_id))
+        mysql.connection.commit()
+        cur.close()
+    return render_template('test1.html')
 
 @app.route('/register/', methods = ['GET', 'POST'])
 def register():
@@ -93,13 +188,19 @@ def login():
         resultValue = cur.execute("SELECT * FROM login WHERE email = %s", ([email]))
         if resultValue > 0:
             user = cur.fetchone()
-            print(user)
+            # print(user)
             if check_password_hash(user['password'], userDetails['password']):
                 session['login'] = True
                 session['firstName'] = user['first_name']
                 session['lastName'] = user['last_name']
                 session['userId'] = user['user_id']
-                print(session)
+                if user['user_type'] == "Requestor":
+                    session.clear()
+                    cur.close()
+                    flash('Only Responders can login', 'info')
+                    return redirect('/login')
+                session['userType'] = user['user_type']
+                # print(session)
                 flash('Welcome ' + session['firstName'] + '! You have been successfully logged in', 'success')
             else:
                 cur.close()
@@ -143,48 +244,6 @@ def write_blog():
         return render_template('upload-question.html')
     else:
         return redirect('/login')
-
-@app.route('/my-blogs/', methods = ['GET'])
-def my_blogs():
-    if session:
-        author = session['firstName'] + ' ' + session['lastName']
-        cur = mysql.connection.cursor()
-        result_value = cur.execute("SELECT * FROM blog WHERE author = %s", [author])
-        if result_value > 0:
-            my_blogs = cur.fetchall()
-            return render_template('my-blogs.html', my_blogs = my_blogs)
-        else:
-            return render_template('my-blogs.html', my_blogs = None)
-    else:
-        return redirect('/login')
-
-@app.route('/edit-blog/<int:id>/', methods = ['GET', 'POST'])
-def edit_blog(id):
-    if request.method == 'POST':
-        cur = mysql.connection.cursor()
-        title = request.form['title']
-        body = request.form['body']
-        cur.execute("UPDATE blog SET title = %s, body = %s WHERE blog_id = %s", (title, body, id))
-        mysql.connection.commit()
-        cur.close()
-        flash('Blog updated successfully', 'success')
-        return redirect('/blogs/{}'.format(id))
-    cur = mysql.connection.cursor()
-    result_value = cur.execute("SELECT * FROM blog WHERE blog_id = {}".format(id))
-    if result_value > 0:
-        blog = cur.fetchone()
-        blog_form = {}
-        blog_form['title'] = blog['title']
-        blog_form['body'] = blog['body']
-        return render_template('edit-blog.html', blog_form = blog_form)
-
-@app.route('/delete-blog/<int:id>/')
-def delete_blog(id):
-    cur = mysql.connection.cursor()
-    cur.execute("DELETE FROM blog WHERE blog_id = {}".format(id))
-    mysql.connection.commit()
-    flash('Your blog has been deleted', 'success')
-    return redirect('/my-blogs')
 
 @app.route('/logout/')
 def logout():
@@ -233,4 +292,4 @@ def insertBLOB(name, photo, category):
             return id
 
 if __name__ == '__main__':
-    app.run(debug = True)
+    app.run(debug = True, host='0.0.0.0', port='5000')
